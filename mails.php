@@ -32,17 +32,17 @@ $db_wp   = 'frescan';
 
 
 
-
-
 //Prefijo de nombre de tablas de base de datos
 $pre_wp = "frc_";
-//Primero hare un select para traer los dias que tenga habilitados
+//Primero hare un select para traer los dias que tenga habilitados y la template
 
 $sql_days_active = "SELECT id, dias, active, created_at
-FROM ". $pre_wp ."fres_recorder_days ffrd where ffrd.active = 1;";
+                    FROM ". $pre_wp ."fres_recorder_days ffrd where ffrd.active = 1;";
 
+$sql_template = "SELECT email_body
+                    FROM ". $pre_wp ."fres_email_templates ffet 
+                    WHERE ffet.template_name = 'recorder_plans';";
 
-//Query consulta de correos de pedidos completos hace 25 dias
 
 $correos = [];
 
@@ -88,7 +88,6 @@ if ($result_days) {
                 }
             } else {
                  $log->insert("Error en el result de la consulta de correos a la base de datos para el dia $dias_atras", false, false, false);
-                //("Error : " . mysqli_error($mysqli) . " " . mysqli_errno($mysqli));
             }
         }
     }else{
@@ -96,12 +95,26 @@ if ($result_days) {
     }
 } else {
      $log->insert('Error en el result de la consulta de dias a la base de datos', false, false, false);
-    //("Error : " . mysqli_error($mysqli) . " " . mysqli_errno($mysqli));
 }
 
 //Configuracion de Opciones de Envio de Email
+$result_template = $mysqli->query($sql_template);
+
+if ($result_template) {
+    if ($result_template->num_rows > 0) {
+        //output data of each row
+        while ($row = $result_template->fetch_assoc()) {
+            $string_html = $row['email_body'];
+        }
+    }
+} else {
+    $log->insert("Error en el result de la consulta de correos a la base de datos para el template", false, false, false);
+}
+
 $mail = new PHPMailer(true);
-if(count($correos) > 0){
+
+
+if(count($correos) > 0 && $result_template){
     try {
         //Server settings
         $mail->SMTPDebug = 0;                       //Enable verbose debug output
@@ -120,20 +133,14 @@ if(count($correos) > 0){
         foreach($correos as $key=> $value){
             $mail->addAddress("$value");     
         }
-                  //Name is optional
-        //$mail->addReplyTo('info@example.com', 'Information');
-        //$mail->addCC('cc@example.com');
-        //$mail->addBCC('bcc@example.com');
-    
-        //Attachments
-        //$mail->addAttachment('/var/tmp/file.tar.gz');         //Add attachments
-        //$mail->addAttachment('/tmp/image.jpg', 'new.jpg');    //Optional name
-    
+                  
         //Content
         $mail->isHTML(true);                                  //Set email format to HTML
         $mail->Subject = 'Recordatorio de Plan';
         //Inclusion de archivo con variable que tiene el codigo html del correo
-        include 'inc/format_html.php';
+        // include 'inc/format_html.php';
+        
+
         $mail->Body = $string_html;
         //$mail->AltBody = 'This is the body in plain text for non-HTML mail clients';
     
@@ -147,5 +154,5 @@ if(count($correos) > 0){
     }
     
 }else{
-     $log->insert('La cantidad de correos obtenida fue cero', false, false, false);
+     $log->insert('La cantidad de correos obtenida fue cero o no se obtuvo template para enviar el correo', false, false, false);
 }
